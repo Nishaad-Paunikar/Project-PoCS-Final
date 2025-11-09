@@ -59,7 +59,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# 🌦️ SECTION 1: WEATHER + GLOBAL TIMES + LOCAL CLOCK
+# 🌦️ SECTION 1: WEATHER + GLOBAL TIMES + LOCAL CLOCK (JS-based live updates)
 # ============================================================
 st.subheader("🌦️ Global Weather & Times")
 
@@ -84,39 +84,66 @@ def fetch_weather(city):
     except Exception:
         return None, None, None
 
-# 4 columns: 3 cities + local time
-wc1, wc2, wc3, wc4 = st.columns(4)
+# pre-fetch weather once (no repeated API calls)
+weather_data = {c: fetch_weather(c) for c in cities}
 
-for col, city in zip([wc1, wc2, wc3], cities):
-    temp, desc, icon = fetch_weather(city)
-    tz = pytz.timezone(timezones[city])
-    local_time = datetime.now(tz).strftime("%I:%M:%S %p %Z")
+wc1, wc2, wc3, wc4 = st.columns(4)
+cols = [wc1, wc2, wc3]
+
+# city clocks rendered entirely in JS for smooth updates
+for col, city in zip(cols, cities):
+    temp, desc, icon = weather_data[city]
+    latlon_js = {
+        "New York": "America/New_York",
+        "London": "Europe/London",
+        "New Delhi": "Asia/Kolkata"
+    }[city]
+
     with col:
         st.markdown(f"**{city}**")
-        st.markdown(f"<p class='clock'>🕒 {local_time}</p>", unsafe_allow_html=True)
+        components.html(f"""
+            <div style="font-size:1.4rem;font-weight:600;color:#00FFB3;text-shadow:0 0 10px #00FFB3;">
+                🕒 <span id="{city.replace(' ', '_')}_clock"></span>
+            </div>
+            <script>
+            function updateClock_{city.replace(' ', '_')}() {{
+                const now = new Date();
+                const options = {{
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    hour12: true, timeZone: '{latlon_js}'
+                }};
+                document.getElementById("{city.replace(' ', '_')}_clock").textContent =
+                    now.toLocaleTimeString([], options);
+            }}
+            setInterval(updateClock_{city.replace(' ', '_')}, 1000);
+            updateClock_{city.replace(' ', '_')}();
+            </script>
+        """, height=45)
+
         if temp is not None:
             st.image(f"http://openweathermap.org/img/wn/{icon}@2x.png", width=60)
             st.markdown(f"🌡️ {temp:.1f}°C — {desc}")
         else:
             st.markdown("❌ Weather unavailable")
 
-# Local JS-based real-time clock
+# local device time
 with wc4:
     st.markdown("**Local Device Time**")
     components.html("""
-        <div style="font-size:1.4rem;font-weight:600;color:#00FFB3;">
-            🕒 <span id="local-clock"></span>
+        <div style="font-size:1.4rem;font-weight:600;color:#00FFB3;text-shadow:0 0 10px #00FFB3;">
+            🕒 <span id="local_clock"></span>
         </div>
         <script>
-        function updateClock() {
+        function updateLocalClock() {
             const now = new Date();
             const t = now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
-            document.getElementById("local-clock").textContent = t;
+            document.getElementById("local_clock").textContent = t;
         }
-        setInterval(updateClock, 1000);
-        updateClock();
+        setInterval(updateLocalClock, 1000);
+        updateLocalClock();
         </script>
     """, height=50)
+
 
 # ============================================================
 # 💹 SECTION 2: LIVE INDIAN STOCK PRICES
